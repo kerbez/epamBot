@@ -133,8 +133,85 @@ def handle_help(message):
     answer = ''
     if telebot_res is None:
         answer = '\n I see you didn\'t specify an email. Please give me your email'
-    add_mes = '/start \t start bot dialog \n/help \t list of all commands \n/list \t list of books you lent'
+    add_mes = '/start - start bot dialog \n/help - list of all commands \n/list - list of books you lent \n/showmybooks - your books \n/showbooksof @email - list of books of user with @email'
     greet_bot.send_message(chat_id, "I'm Epam bot. I can help you, if you are registered in the Epam\'s *Library* application" + answer + '\n' + add_mes, parse_mode=telegram.ParseMode.MARKDOWN)
+
+
+@greet_bot.message_handler(commands=['showmybooks'])
+def handle_help(message):
+    print('hereeeee')
+    chat_id = message.chat.id
+    telebot_res = db.reference('teleBot').child('chat_to_user').child(str(chat_id)).get()
+    print(telebot_res)
+    answer = ''
+    if telebot_res is None:
+        answer = 'I\'m Epam bot. I can help you, if you are registered in the Epam\'s *Library* application\n I see you didn\'t specify an email. Please give me your email'
+    else:
+        print('in else')
+        user_res = db.reference('users').child(telebot_res).get()
+        bookIDs = user_res['book_ids']
+        book_ref = db.reference('books')
+        order_res = db.reference('orders').get()
+        ans = ''
+        for order in order_res:
+            print('in for')
+            print(answer)
+            from_owner_id = order_res[order]['from_owner_id']
+            print(telebot_res, from_owner_id)
+            if telebot_res == from_owner_id:
+                now = datetime.datetime.now()
+                user = db.reference('users').child(order_res[order]['to_user_id']).get()
+                book = db.reference('books').child(order_res[order]['book_id']).get()
+                now_date = datetime.datetime.strptime(str(now.year) + '-' + str(now.month) + '-' + str(now.day),
+                                                      '%Y-%m-%d')
+                end_date = datetime.datetime.strptime(order_res[order]['start_date'], '%Y-%m-%d') + datetime.timedelta(
+                    int(order_res[order]['duration']))
+                days = ''
+                if (now_date - end_date).days == 1:
+                    days = 'in ' + str((now_date - end_date).days) + ' day'
+                elif (now_date - end_date).days == 0:
+                    days = 'today'
+                elif (now_date - end_date).days > 1:
+                    days = str((now_date - end_date).days) + ' days ago'
+                elif (now_date - end_date).days == -1:
+                    days = 'tomorrow'
+                else:
+                    days = 'in ' + str((now_date - end_date).days) + ' days'
+                answer += '*' + user['first_name'] + '* need to return \'*' + book['title'] + '*\' book ' + days + '\n'
+    if answer == '':
+        answer = 'You didn\'t lend your books to anyone'
+    greet_bot.send_message(chat_id, answer, parse_mode=telegram.ParseMode.MARKDOWN)
+
+
+@greet_bot.message_handler(commands=['showbooksof'])
+def handle_help(message):
+    chat_id = message.chat.id
+    telebot_res = db.reference('teleBot').child('chat_to_user').child(str(chat_id)).get()
+    print(telebot_res)
+    answer = ''
+    if telebot_res is None:
+        answer = '\n I see you didn\'t specify an email. Please give me your email'
+    else:
+        user_id = ''
+        if len(message.text.split()) < 2 or '@' not in message.text.split()[1]:
+            answer = 'enter email of user after command'
+        else:
+            email = message.text.split()[1]
+            user_ref = db.reference('users').get()
+            is_ok = 0
+            for user in user_ref:
+                if user_ref[user]['email'] == email:
+                    is_ok = 1
+                    books = db.reference('users').child(user).child('book_ids').get()
+                    print(books)
+                    for book_id in books:
+                        print(book_id)
+                        book = db.reference('books').child(book_id).get()
+                        answer += '*' + book['title'] + '*\n   _' + book['author'] + '_\n'
+            if is_ok == 0:
+                answer = 'there is no user with similar email, try again'
+    greet_bot.send_message(chat_id, answer,
+                               parse_mode=telegram.ParseMode.MARKDOWN)
 
 
 @greet_bot.message_handler(commands=['list'])
